@@ -7,15 +7,16 @@
 #include <Wire.h>
 
 #define SERIAL_DEBUG 0
-#define DEBOUNCE_TIME 150
+#define DEBOUNCE_TIME 120
 
 #define BUTTON_GO 0
 #define BUTTON_RESET 1
 #define BUTTON_MODE 2
 
 #define BUZZER 3
+#define BUTTON_GO_LIGHT 4
 #define GOLIGHT 5
-#define BACKLIGHT 6
+#define BUTTON_RESET_LIGHT 6
 
 #define MODE_LIGHT 0
 #define MODE_BUZZ 1
@@ -34,9 +35,7 @@ LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
 void setup()
 {
 	lcd.begin(20, 4);
-	lcd.print("Test Your Reaction!");
-	lcd.setCursor(0, 1);
-	lcd.print("Mode: Light");
+  modemessage(taskmode);
 
 	#if SERIAL_DEBUG
 		Serial.begin(9600);
@@ -48,11 +47,10 @@ void setup()
 	pinMode(BUTTON_RESET, INPUT_PULLUP);
   randomSeed(analogRead(A5));
 
-	pinMode(BACKLIGHT, OUTPUT);
   pinMode(BUZZER, OUTPUT);
   pinMode(GOLIGHT, OUTPUT);
   pinMode(BUTTON_GO_LIGHT, OUTPUT);
-	analogWrite(BACKLIGHT, 200);
+  pinMode(BUTTON_RESET_LIGHT, OUTPUT);
 }
 
 void loop()
@@ -62,44 +60,78 @@ void loop()
   if(! digitalRead(BUTTON_GO))
     runtask(taskmode);
   if(! digitalRead(BUTTON_MODE)) {
-    if(taskmode >= 2)
+    if(taskmode >= 1)
       taskmode = 0;
     else
       taskmode++;
+    modemessage(taskmode);
   }
 }
 
 void runtask(int run_mode)
 {
   lcd.setCursor(0, 2);
-  delay(500);
-  lcd.print("Get ready for ");
+  lcd.print("Get ready!");
+  digitalWrite(BUTTON_GO_LIGHT, HIGH);
   
-  switch(taskmode) {
-    case MODE_LIGHT:
-      lcd.print("light!");
-      break;
-  }
-  
-  go_waittime = random(1500, 6500);
+  go_waittime = random(2000, 7000);
   delay(go_waittime);
 
-  switch(taskmode) {
+  switch(run_mode) {
     case MODE_LIGHT:
-      analogWrite(BACKLIGHT, 150); // GO!
+      digitalWrite(GOLIGHT, HIGH); // GO!
+      break;
+    case MODE_BUZZ:
+      tone(BUZZER, 440);
       break;
   }
   
   go_signaltime = millis();
   while(digitalRead(BUTTON_GO));
   go_respondtime = millis() - go_signaltime;
-  analogWrite(BACKLIGHT, 200);
-  dispmessage(run_mode, go_respondtime);
+
+  switch(run_mode) {
+    case MODE_LIGHT:
+      digitalWrite(GOLIGHT, LOW);
+      break;
+    case MODE_BUZZ:
+      noTone(BUZZER);
+      break;
+  }
+  digitalWrite(BUTTON_GO_LIGHT, LOW);
+  dispmessage(go_respondtime);
+  waitforreset();
+  modemessage(run_mode);
 }
 
-void dispmessage(int run_mode, unsigned long go_respondtime)
+void dispmessage(unsigned long internal_respondtime)
 {
-  lcd.setCursor(0, 3);
-  lcd.print(String (float (go_respondtime)/1000, 3));
+  lcd.setCursor(0, 2);
+  lcd.print("                    ");
+  lcd.setCursor(3, 3);
+  lcd.print(String (float (internal_respondtime)/1000, 3));
   lcd.print(" sec");
 }
+
+void modemessage(int run_mode)
+{
+  lcd.clear();
+  lcd.print("Test Your Reaction!");
+  lcd.setCursor(0, 1);
+  switch(run_mode) {
+    case MODE_LIGHT:
+      lcd.print("Mode: Light");
+      break;
+    case MODE_BUZZ:
+      lcd.print("Mode: Buzz");
+      break;
+  }
+}
+
+void waitforreset()
+{
+  digitalWrite(BUTTON_RESET_LIGHT, HIGH);
+  while( digitalRead(BUTTON_RESET) );
+  digitalWrite(BUTTON_RESET_LIGHT, LOW);
+}
+
